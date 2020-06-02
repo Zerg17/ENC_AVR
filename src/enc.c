@@ -229,3 +229,24 @@ uint16_t encPacketReceive(uint8_t* data, uint16_t maxlen){
 	return len;
 
 }
+
+void encPacketTransmit(uint8_t* data, uint16_t len){
+    // Жем завершения преддыдущей передачи
+    while (encReadReg(ECON1) & ECON1_TXRTS){
+        if( (encReadReg(EIR) & EIR_TXERIF) ) {
+            encSetReg(ECON1, ECON1_TXRST);
+		    encClearReg(ECON1, ECON1_TXRST);
+        }
+    }
+    encSetBank(0);
+    // Устанавливаем указатель записи на начало буфера
+    encWriteDudleReg(EWRPT, TX_START);
+    // Первый байт в пакете задает настройки передачи при 0 настройки по умолчанию
+	encWriteBuf(0, 1);
+	// копируем пакет в буфер передачи
+	encWriteBuf(data, len);
+    // Устанавливаем указатель конца буфера в соответствии с размером пакета
+	encWriteDudleReg(ETXND, TX_START+len);
+	// Запускаем передачу
+	encSetReg(ECON1, ECON1_TXRTS);
+}

@@ -74,9 +74,9 @@ struct{
 struct t_Setting_Network Setting_Network;
 struct t_arpGate arpGate;
 
-void encProcess_ARP(void);
-void encProcess_IP(void);
-void encProcess_ICMP(void);
+uint16_t encProcess_ARP(void);
+uint16_t encProcess_IP(void);
+uint16_t encProcess_ICMP(void);
 void encUpdate_IP(void);
 uint16_t encCalcCRC(uint8_t *adr, uint16_t LongData, uint16_t StartCRC);
 
@@ -92,25 +92,24 @@ void packetReceive(void){
 
 	if(ETHTYPE==ETHTYPE_ARP || ETHTYPE==ETHTYPE_IP){
 
-		encTxPackInit();
 		for (uint8_t i=0;i<6;i++){ // Выставляем MAC адреса приемника и источника
 			net.eth.dstMAC[i] = net.eth.srcMAC[i];
 			net.eth.srcMAC[i] = Setting_Network.MAC_Addr_Core[i];
 		}
-		encWriteBuf((uint8_t *)&net.eth, sizeof(net.eth)); // Записываем для передачи MAC приемника и источника + тип пакета
-
+		//encWriteBuf((uint8_t *)&net.eth, sizeof(net.eth)); // Записываем для передачи MAC приемника и источника + тип пакета
+		uint16_t packCount = 0;
 		switch (ETHTYPE){
-			case ETHTYPE_ARP: encProcess_ARP(); break;
-			case ETHTYPE_IP: encProcess_IP(); break;
+			case ETHTYPE_ARP: packCount+=encProcess_ARP(); break;
+			case ETHTYPE_IP:  packCount+=encProcess_IP(); break;
 		}
-		encRxPackDone();
-
+		
+		if(packCount) encPacketTransmit((uint8_t*)&net, packCount + sizeof(net.eth));
 	}	
 }
 
-void encProcess_ARP(void){
+uint16_t encProcess_ARP(void){
 	uint16_t ETHTYPE = (net.arp.ptype[0]<<8)|net.arp.ptype[1];
-	if (ETHTYPE !=  ETHTYPE_IP) return;
+	if (ETHTYPE !=  ETHTYPE_IP) return 0;
 
 	uint8_t FlagOurIp	= 0;
 	uint8_t FlagOurGate = 0;
@@ -132,24 +131,23 @@ void encProcess_ARP(void){
 			net.arp.tha[i] = net.arp.sha[i];
 			net.arp.sha[i] = Setting_Network.MAC_Addr_Core[i];
 		}
-		encWriteBuf((uint8_t *)&net.arp, sizeof(net.arp));
-		encTxPackSend();
-		return;
+		return sizeof(net.arp);
 	} else if ((net.arp.oper[1] == ARP_REPLY) & (FlagOurGate == 4)){
 		for (uint8_t i=0; i<6; i++)
 			arpGate.MAC[i] = net.arp.sha[i];
-		return;
+		return 0;
 	}
+	return 0;
 }
 
-void encProcess_IP(void){
-	if (net.ip.ver_hlen!= 0x45) return;
+uint16_t encProcess_IP(void){
+	if (net.ip.ver_hlen!= 0x45) return 0;
 	
 	for (uint8_t i=0; i<4; i++)
 		if (net.ip.ip_dst[i] == Setting_Network.IP_Addr_Core[i]) {
 			net.ip.ip_dst[i] = net.ip.ip_src[i];
 			net.ip.ip_src[i] = Setting_Network.IP_Addr_Core[i];
-		} else return;
+		} else return 0;
 	// Устанавливаем байт TOS в 0, это для DSCP + ECN
 	net.ip.tos = 0x00;
 	// Устанавливаем флаги и смещение в 0x0000
@@ -157,54 +155,44 @@ void encProcess_IP(void){
 	net.ip.flugs_fo[1]  = 0x00;
 	// Устанавливаем TTL
 	net.ip.ttl = IP_TTLVALUE;
-	encWriteBuf((uint8_t *)&net.ip, 20);
+	uint16_t packCount = IP_SIZE;
 	
 	LongPacket	=  (net.ip.lenght[0] << 8) | net.ip.lenght[1]; 
 	LongPacket -= IP_SIZE;
 	
 	uint8_t ProtoIP = net.ip.proto;
-	if (ProtoIP == IP_PROTO_ICMP) encProcess_ICMP();
+	if (ProtoIP == IP_PROTO_ICMP) packCount+=encProcess_ICMP();
 	//if (ProtoIP == IP_PROTO_TCP) encProcess_TCP();
 	//if (ProtoIP == IP_PROTO_UDP) encProcess_UDP();
+	if(packCount==IP_SIZE) return 0;
+	else return packCount;
 }
 
-void encProcess_ICMP(void){
-	if (net.ip.icmp.type != ICMP_ECHO_REQ) return;
+uint16_t encProcess_ICMP(void){
+	if (net.ip.icmp.type != ICMP_ECHO_REQ) return 0;
 	 
-	net.ip.icmp.type = ICMP_ECHO_REPLY;				// Set answer
+	net.ip.icmp.type = ICMP_ECHO_REPLY;
 	uint16_t CRC_ICMP = (net.ip.icmp.checksum[1] << 8) + net.ip.icmp.checksum[0];
 	CRC_ICMP += 8;
 	net.ip.icmp.checksum[1] = (uint8_t)(CRC_ICMP >> 8);
 	net.ip.icmp.checksum[0]	 = (uint8_t)(CRC_ICMP);
-	encWriteBuf((uint8_t *)&net.ip.icmp, sizeof(net.ip.icmp));
 	LongPacket -= ICMP_SIZE;
-	if (LongPacket == 0){
-		encUpdate_IP();
-		encTxPackSend();
-		return;
-	}
-	encWriteBuf((uint8_t *)&net.ip.icmp.data, LongPacket);
 	encUpdate_IP();
-	encTxPackSend();
+	if (LongPacket == 0) return sizeof(net.ip.icmp);
+	else return LongPacket + sizeof(net.ip.icmp);
 }
 
 void encUpdate_IP(void){
 	uint16_t EndAdrrPacket = encGetWriteAdr();
 	uint16_t LengthPacket  = EndAdrrPacket - (TX_BASE+ETH_SIZE);
 	net.ip.lenght[0] = (uint8_t)(LengthPacket >> 8);
-	net.ip.lenght[1]	= (uint8_t)LengthPacket;
-	encSetWriteAdr(TX_BASE+ETH_SIZE+IP_LENGTH);
-	encWriteBuf((uint8_t *)(net.ip.lenght), 2);
-	net.ip.hcs[0]	= 0x00;
+	net.ip.lenght[1] = (uint8_t)LengthPacket;
+	net.ip.hcs[0] = 0x00;
 	net.ip.hcs[1] = 0x00;
 	uint16_t CRC_IP = encCalcCRC((uint8_t *)(&net.ip),IP_SIZE,0);
-	CRC_IP = ~CRC_IP;
-								
-	net.ip.hcs[0]	= (uint8_t)(CRC_IP >> 8);
+	CRC_IP = ~CRC_IP;						
+	net.ip.hcs[0] = (uint8_t)(CRC_IP >> 8);
 	net.ip.hcs[1] = (uint8_t)CRC_IP;
-	encSetWriteAdr(TX_BASE+ETH_SIZE+IP_HCS);
-	encWriteBuf((uint8_t *)(net.ip.hcs),2);
-	encSetWriteAdr(EndAdrrPacket);
 }
 
 uint16_t encCalcCRC(uint8_t *adr, uint16_t len, uint16_t crc16){

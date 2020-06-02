@@ -5,6 +5,7 @@
 
 void encInit(void);
 uint16_t encPacketReceive(uint8_t* data, uint16_t maxlen);
+void encPacketTransmit(uint8_t* data, uint16_t len);
 void encWriteBuf(uint8_t *buf, uint16_t len);
 void encReadBuf(uint8_t *buf, uint16_t len);
 uint8_t encTestTransmitBusy(void);
