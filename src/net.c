@@ -45,7 +45,7 @@ struct{
 					uint8_t dstport[2];
 					uint8_t lenght[2];
 					uint8_t hcs[2];
-					uint8_t data[];
+					uint8_t data[FRAME_LENGTH-14-20-8];
 				}udp;
 				struct{
 					uint8_t srcport[2];
@@ -57,28 +57,29 @@ struct{
 					uint8_t window[2];
 					uint8_t checksum[2];
 					uint8_t urgent[2];
-					uint8_t data[];
+					uint8_t data[FRAME_LENGTH-14-20-20];
 				}tcp;
 				struct{
 					uint8_t type;
 					uint8_t code;
 					uint8_t checksum[2];
-					uint8_t data[];
+					uint8_t ident[2];
+					uint8_t seq_le[2];
+					uint8_t data[FRAME_LENGTH-14-20-8];
 				}icmp;
 			};
 		}ip;
 	};
-	uint8_t res[FRAME_LENGTH-14-28];
 } net;
 
 struct t_Setting_Network Setting_Network;
 struct t_arpGate arpGate;
 
-uint16_t encProcess_ARP(void);
-uint16_t encProcess_IP(void);
-uint16_t encProcess_ICMP(void);
-void encUpdate_IP(void);
-uint16_t encCalcCRC(uint8_t *adr, uint16_t LongData, uint16_t StartCRC);
+uint16_t netProcess_ARP(void);
+uint16_t netProcess_IP(void);
+uint16_t netProcess_ICMP(void);
+void netUpdate_IP(void);
+uint16_t netCalcCRC(uint8_t *adr, uint16_t LongData, uint16_t StartCRC);
 
 uint16_t LongPacket;
 
@@ -86,7 +87,7 @@ void packetReceive(void){
 	// Считываем принятый пакет если есть
 	uint16_t packLen = encPacketReceive((uint8_t*)&net, sizeof(net));
 	if(packLen==0)return;
-	
+
 	// Определяем тип пакета
 	uint16_t ETHTYPE = (net.eth.type[0]<<8)|net.eth.type[1];
 
@@ -99,15 +100,15 @@ void packetReceive(void){
 		//encWriteBuf((uint8_t *)&net.eth, sizeof(net.eth)); // Записываем для передачи MAC приемника и источника + тип пакета
 		uint16_t packCount = 0;
 		switch (ETHTYPE){
-			case ETHTYPE_ARP: packCount+=encProcess_ARP(); break;
-			case ETHTYPE_IP:  packCount+=encProcess_IP(); break;
+			case ETHTYPE_ARP: packCount+=netProcess_ARP(); break;
+			case ETHTYPE_IP:  packCount+=netProcess_IP(); break;
 		}
 		
 		if(packCount) encPacketTransmit((uint8_t*)&net, packCount + sizeof(net.eth));
 	}	
 }
 
-uint16_t encProcess_ARP(void){
+uint16_t netProcess_ARP(void){
 	uint16_t ETHTYPE = (net.arp.ptype[0]<<8)|net.arp.ptype[1];
 	if (ETHTYPE !=  ETHTYPE_IP) return 0;
 
@@ -140,7 +141,7 @@ uint16_t encProcess_ARP(void){
 	return 0;
 }
 
-uint16_t encProcess_IP(void){
+uint16_t netProcess_IP(void){
 	if (net.ip.ver_hlen!= 0x45) return 0;
 	
 	for (uint8_t i=0; i<4; i++)
@@ -161,45 +162,39 @@ uint16_t encProcess_IP(void){
 	LongPacket -= IP_SIZE;
 	
 	uint8_t ProtoIP = net.ip.proto;
-	if (ProtoIP == IP_PROTO_ICMP) packCount+=encProcess_ICMP();
+	if (ProtoIP == IP_PROTO_ICMP) packCount+=netProcess_ICMP();
 	//if (ProtoIP == IP_PROTO_TCP) encProcess_TCP();
 	//if (ProtoIP == IP_PROTO_UDP) encProcess_UDP();
 	if(packCount==IP_SIZE) return 0;
-	else return packCount;
+	else{
+		net.ip.lenght[0] = (uint8_t)(packCount >> 8);
+		net.ip.lenght[1] = (uint8_t)packCount;
+		net.ip.hcs[0] = 0x00;
+		net.ip.hcs[1] = 0x00;
+		
+		uint16_t CRC_IP = netCalcCRC((uint8_t *)(&net.ip),IP_SIZE,0);						
+		net.ip.hcs[0] = (uint8_t)(CRC_IP >> 8);
+		net.ip.hcs[1] = (uint8_t)CRC_IP;
+
+		return packCount;
+	}
 }
 
-uint16_t encProcess_ICMP(void){
+uint16_t netProcess_ICMP(void){
 	if (net.ip.icmp.type != ICMP_ECHO_REQ) return 0;
-	 
 	net.ip.icmp.type = ICMP_ECHO_REPLY;
 	uint16_t CRC_ICMP = (net.ip.icmp.checksum[1] << 8) + net.ip.icmp.checksum[0];
 	CRC_ICMP += 8;
 	net.ip.icmp.checksum[1] = (uint8_t)(CRC_ICMP >> 8);
 	net.ip.icmp.checksum[0]	 = (uint8_t)(CRC_ICMP);
-	LongPacket -= ICMP_SIZE;
-	encUpdate_IP();
-	if (LongPacket == 0) return sizeof(net.ip.icmp);
-	else return LongPacket + sizeof(net.ip.icmp);
+	return LongPacket;
 }
 
-void encUpdate_IP(void){
-	uint16_t EndAdrrPacket = encGetWriteAdr();
-	uint16_t LengthPacket  = EndAdrrPacket - (TX_BASE+ETH_SIZE);
-	net.ip.lenght[0] = (uint8_t)(LengthPacket >> 8);
-	net.ip.lenght[1] = (uint8_t)LengthPacket;
-	net.ip.hcs[0] = 0x00;
-	net.ip.hcs[1] = 0x00;
-	uint16_t CRC_IP = encCalcCRC((uint8_t *)(&net.ip),IP_SIZE,0);
-	CRC_IP = ~CRC_IP;						
-	net.ip.hcs[0] = (uint8_t)(CRC_IP >> 8);
-	net.ip.hcs[1] = (uint8_t)CRC_IP;
-}
-
-uint16_t encCalcCRC(uint8_t *adr, uint16_t len, uint16_t crc16){
+uint16_t netCalcCRC(uint8_t *adr, uint16_t len, uint16_t crc16){
 	uint32_t crc = crc16;
 	for (uint16_t i = 0; i < len; i++)
 		if (i & 1) crc += (uint32_t)adr[i];
 		else crc += ((uint32_t)(adr[i]))<<8;
 	crc = (uint16_t)(crc >> 16)+(uint16_t)(crc);
-	return (uint16_t)(crc);
+	return ~crc;
 }
