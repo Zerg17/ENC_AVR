@@ -12,22 +12,22 @@ int main(void){
     // recR(TCCR1B, 0b00011100);
 
     //xprintf("Zerg17 Server\n");
-    Setting_Network.MAC_Addr_Core[0] = MAC_0;
-    Setting_Network.MAC_Addr_Core[1] = MAC_1;
-    Setting_Network.MAC_Addr_Core[2] = MAC_2;
-    Setting_Network.MAC_Addr_Core[3] = MAC_3;
-    Setting_Network.MAC_Addr_Core[4] = MAC_4;
-    Setting_Network.MAC_Addr_Core[5] = MAC_5;
+    netSettings.MAC[0] = MAC_0;
+    netSettings.MAC[1] = MAC_1;
+    netSettings.MAC[2] = MAC_2;
+    netSettings.MAC[3] = MAC_3;
+    netSettings.MAC[4] = MAC_4;
+    netSettings.MAC[5] = MAC_5;
 
-    Setting_Network.IP_Addr_Core[0] = Addr_IP_0;
-    Setting_Network.IP_Addr_Core[1] = Addr_IP_1;
-    Setting_Network.IP_Addr_Core[2] = Addr_IP_2;
-    Setting_Network.IP_Addr_Core[3] = Addr_IP_3;
+    netSettings.IP[0] = Addr_IP_0;
+    netSettings.IP[1] = Addr_IP_1;
+    netSettings.IP[2] = Addr_IP_2;
+    netSettings.IP[3] = Addr_IP_3;
 
-    Setting_Network.IP_Addr_Gate[0] = Addr_Gate_0;
-    Setting_Network.IP_Addr_Gate[1] = Addr_Gate_1;
-    Setting_Network.IP_Addr_Gate[2] = Addr_Gate_2;
-    Setting_Network.IP_Addr_Gate[3] = Addr_Gate_3;
+    netSettings.GW[0] = Addr_Gate_0;
+    netSettings.GW[1] = Addr_Gate_1;
+    netSettings.GW[2] = Addr_Gate_2;
+    netSettings.GW[3] = Addr_Gate_3;
 
     encInit();
 

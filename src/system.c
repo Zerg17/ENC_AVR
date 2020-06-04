@@ -4,11 +4,6 @@
 // uint8_t bufUI[256];
 // volatile uint8_t posTX=0, posW=0;
 
-void uartWrite(unsigned char d){
-    while(!(UCSR0A & (1<<UDRE0)));
-    UDR0 = d;
-}
-
 // void uartWriteISR(unsigned char d){
 //     bufUI[posW++]=d;
 //     while(posW==posTX);
@@ -19,6 +14,11 @@ void uartWrite(unsigned char d){
 //     UDR0 = bufUI[posTX++];
 //     if(posTX==posW)resRB(UCSR0B, UDRIE0);
 // }
+
+void uartWrite(unsigned char d){
+    while(!(UCSR0A & (1<<UDRE0)));
+    UDR0 = d;
+}
 
 void uartInit(void) {
     xdev_out(uartWrite);
@@ -31,6 +31,7 @@ void spi_init() {
     resR(DDRB, 0b010000);
     setR(DDRB, 0b101100);
     recR(SPCR, 0b01010000);
+    resRB(SPSR, SPI2X);
 }
 
 uint8_t spiWR(uint8_t d) {

@@ -6,12 +6,6 @@
 #define ENC_SET resRB(PORTB, 2)
 #define ENC_RES setRB(PORTB, 2)
 
-struct{
-    uint16_t RX_Addr;
-    uint16_t RX_Packet_Length;
-    uint16_t RX_Packet_Status;
-} encPackedHead = {RX_START, 0x00, 0x00};
-
  // Мягкая перезагрузка
 static inline void encSoftReset(void){
     ENC_SET;
@@ -36,7 +30,7 @@ void encWriteReg(uint8_t adr, uint8_t data){
 // Записать регистр
 void encWriteDudleReg(uint8_t adr, uint16_t data){
 	encDoubleWrite(CMD_WCR|(adr&0x1f),data);
-    encDoubleWrite(CMD_WCR|(adr&0x1f)+1,data>>8);
+    encDoubleWrite(CMD_WCR|((adr+1)&0x1f),data>>8);
 }
 
 // Чтение регистра
@@ -120,79 +114,6 @@ void encInit(void){
     encWritePHY(PHCON2,PHCON2_HDLDIS);
     encWritePHY(PHLCON,PHLCON_LACFG2 |PHLCON_LBCFG2|PHLCON_LBCFG1|PHLCON_LBCFG0 |PHLCON_LFRQ0|PHLCON_STRCH);	
     encSetReg(ECON1,ECON1_RXEN);
-}
-
-uint16_t encGetWriteAdr(void){
-    encSetBank(0);
-    uint16_t data;
-    data = encReadReg(EWRPTL);
-    data |= encReadReg(EWRPTH)<<8;
-    return data;
-}
-
-void encSetWriteAdr(uint16_t adr){
-    encSetBank(0);
-    encWriteDudleReg(EWRPT,adr);
-}
-
-// Инициализируем начальные значения и адрес для передачи паета
-void encTxPackInit(void){
-    encSetWriteAdr(TX_START);
-    ENC_SET;
-    spiWR(CMD_WBM);
-    spiWR(0x00); // 1 байт в пакете задает настройки передачи при 0 настройки по умолчанию
-    ENC_RES;
-}
-
-void encSetReadAdr(uint16_t adr){
-	encSetBank(0);
-    encWriteDudleReg(ERDPT,adr);
-}
-
-void encSetTxEndAdr(uint16_t adr){
-	encSetBank(0);
-    encWriteDudleReg(ETXND,adr);
-}
-
-void encTxPackSend(void){
-    encSetTxEndAdr((encGetWriteAdr() - 1) & MAX_ENC_CHIP_BUFF);
-    encSetReg(ECON1, ECON1_TXRTS);
-}
-
-void encRxPackDone(void){
-	encPackedHead.RX_Addr &= MAX_ENC_CHIP_BUFF;
-	encSetBank(0);
-    encWriteDudleReg(ERXRDPT,encPackedHead.RX_Addr);
-	encSetReadAdr(encPackedHead.RX_Addr); 
-}
-
-uint8_t encTestTransmitBusy(void){
-	if (encReadReg(EIR) & EIR_TXERIF){
-		encSetReg(ECON1,ECON1_TXRST);
-		encClearReg(ECON1,ECON1_TXRST);
-		_delay_ms(1);
-		encSetReg(ECON1,ECON1_TXRTS);
-		_delay_ms(1);
-		while(encTestTransmitBusy()){}
-		return 0;
-	}
-	if (encReadReg(ECON1) & ECON1_TXRTS) return 1;
-	return 0;
-}
-
-uint16_t encIdentifiPacket(void){
-    uint16_t Length_Packet = 0;
-    encSetBank(1); 
-    if(encReadReg(EPKTCNT) == 0) return 0; // Провиряем наличае принятых пакетов
-
-	encSetReadAdr(encPackedHead.RX_Addr);
-	encReadBuf((uint8_t *)&encPackedHead.RX_Addr,6); // Получаем адрес следующего пакета, длину и статус текущего
-
-	if ((((uint8_t)encPackedHead.RX_Packet_Status) >> RecivePKTBitOk) & 1) // Проверяем валидность пакета 
-	    Length_Packet = encPackedHead.RX_Packet_Length;
-
-	encSetReg(ECON2,ECON2_PKTDEC); // Уменьшаем счетчик пакетов на 1
-	return Length_Packet;
 }
 
 uint16_t encPacketReceive(uint8_t* data, uint16_t maxlen){

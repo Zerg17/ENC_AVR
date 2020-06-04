@@ -2,6 +2,7 @@
 #define __Network_H__
 
 #include <stdint.h>
+#include "config.h"
 
 // Длинна или позиция байт разных протоколов
 // Ethernet протокол
@@ -94,20 +95,82 @@
 
 void QueryMACGate(void);
 
-struct t_arpGate{
+typedef struct{
 	uint8_t MAC[6];
 	uint8_t TimeOut;
 	uint8_t	Flag;
-};
+} arpGate_t;
 
-struct t_Setting_Network{
-	uint8_t  MAC_Addr_Core[6];
-	uint8_t	 IP_Addr_Core[4];
-	uint8_t	 IP_Addr_Gate[4];
-};
+typedef struct{
+	uint8_t  MAC[6];
+	uint8_t	 IP[4];
+	uint8_t	 GW[4];
+} netSettings_t;
 
-extern struct t_Setting_Network Setting_Network;
-extern struct t_arpGate arpGate;
+struct{
+	struct{
+		uint8_t dstMAC[6];
+		uint8_t srcMAC[6];
+		uint8_t type[2];
+	} eth;
+	union{
+		struct{
+			uint8_t htype[2];
+			uint8_t ptype[2];
+			uint8_t hlen;
+			uint8_t plen;
+			uint8_t oper[2];
+			uint8_t sha[6];
+			uint8_t spa[4];
+			uint8_t tha[6];
+			uint8_t tpa[4];
+		}arp;
+		struct{
+			uint8_t ver_hlen;
+			uint8_t tos;
+			uint8_t lenght[2];
+			uint8_t id[2];
+			uint8_t flugs_fo[2];
+			uint8_t ttl;
+			uint8_t proto;
+			uint8_t hcs[2];
+			uint8_t ip_src[4];
+			uint8_t ip_dst[4];
+			union{
+				struct{
+					uint8_t srcport[2];
+					uint8_t dstport[2];
+					uint8_t lenght[2];
+					uint8_t hcs[2];
+					uint8_t data[FRAME_LENGTH-14-20-8];
+				}udp;
+				struct{
+					uint8_t srcport[2];
+					uint8_t dstport[2];
+					uint8_t seqnum[4];
+					uint8_t acknum[4];
+					uint8_t doo;
+					uint8_t flags;
+					uint8_t window[2];
+					uint8_t checksum[2];
+					uint8_t urgent[2];
+					uint8_t data[FRAME_LENGTH-14-20-20];
+				}tcp;
+				struct{
+					uint8_t type;
+					uint8_t code;
+					uint16_t checksum;
+					uint8_t ident[2];
+					uint8_t seq_le[2];
+					uint8_t data[FRAME_LENGTH-14-20-8];
+				}icmp;
+			};
+		}ip;
+	};
+} net;
+
+extern netSettings_t netSettings;
+extern arpGate_t arpGate;
 
 void packetReceive(void);
 

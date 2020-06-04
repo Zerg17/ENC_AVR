@@ -3,77 +3,8 @@
 #include "config.h"
 #include "xprintf.h"
 
-// struct{
-// 	uint8_t ETH_BUF_Head[ETH_BUF_HEAD_SIZE];				// Buffer ETH Header
-// 	uint8_t IP_BUF_Head[IP_BUF_HEAD_SIZE];					// Buffer IP Header
-// 	uint8_t TCP_BUF_Head[TCP_BUF_HEAD_SIZE];				// Buffer TCP Header
-// 	uint8_t DATA_BUF_Head[BUF_HEAD_SIZE];					// Buffer Data
-// } netBuf;
-
-struct{
-	struct{
-		uint8_t dstMAC[6];
-		uint8_t srcMAC[6];
-		uint8_t type[2];
-	} eth;
-	union{
-		struct{
-			uint8_t htype[2];
-			uint8_t ptype[2];
-			uint8_t hlen;
-			uint8_t plen;
-			uint8_t oper[2];
-			uint8_t sha[6];
-			uint8_t spa[4];
-			uint8_t tha[6];
-			uint8_t tpa[4];
-		}arp;
-		struct{
-			uint8_t ver_hlen;
-			uint8_t tos;
-			uint8_t lenght[2];
-			uint8_t id[2];
-			uint8_t flugs_fo[2];
-			uint8_t ttl;
-			uint8_t proto;
-			uint8_t hcs[2];
-			uint8_t ip_src[4];
-			uint8_t ip_dst[4];
-			union{
-				struct{
-					uint8_t srcport[2];
-					uint8_t dstport[2];
-					uint8_t lenght[2];
-					uint8_t hcs[2];
-					uint8_t data[FRAME_LENGTH-14-20-8];
-				}udp;
-				struct{
-					uint8_t srcport[2];
-					uint8_t dstport[2];
-					uint8_t seqnum[4];
-					uint8_t acknum[4];
-					uint8_t doo;
-					uint8_t flags;
-					uint8_t window[2];
-					uint8_t checksum[2];
-					uint8_t urgent[2];
-					uint8_t data[FRAME_LENGTH-14-20-20];
-				}tcp;
-				struct{
-					uint8_t type;
-					uint8_t code;
-					uint8_t checksum[2];
-					uint8_t ident[2];
-					uint8_t seq_le[2];
-					uint8_t data[FRAME_LENGTH-14-20-8];
-				}icmp;
-			};
-		}ip;
-	};
-} net;
-
-struct t_Setting_Network Setting_Network;
-struct t_arpGate arpGate;
+netSettings_t netSettings;
+arpGate_t arpGate;
 
 uint16_t netProcess_ARP(void);
 uint16_t netProcess_IP(void);
@@ -95,7 +26,7 @@ void packetReceive(void){
 
 		for (uint8_t i=0;i<6;i++){ // Выставляем MAC адреса приемника и источника
 			net.eth.dstMAC[i] = net.eth.srcMAC[i];
-			net.eth.srcMAC[i] = Setting_Network.MAC_Addr_Core[i];
+			net.eth.srcMAC[i] = netSettings.MAC[i];
 		}
 		//encWriteBuf((uint8_t *)&net.eth, sizeof(net.eth)); // Записываем для передачи MAC приемника и источника + тип пакета
 		uint16_t packCount = 0;
@@ -116,13 +47,13 @@ uint16_t netProcess_ARP(void){
 	uint8_t FlagOurGate = 0;
 
 	for (uint8_t i=0; i<4; i++){
-		if (net.arp.tpa[i] == Setting_Network.IP_Addr_Core[i]) FlagOurIp++;
-		if (net.arp.spa[i] == Setting_Network.IP_Addr_Gate[i]) FlagOurGate++;
+		if (net.arp.tpa[i] == netSettings.IP[i]) FlagOurIp++;
+		if (net.arp.spa[i] == netSettings.GW[i]) FlagOurGate++;
 	}
 	
 	for (uint8_t i=0; i<4; i++){
 		net.arp.tpa[i] = net.arp.spa[i];
-		net.arp.spa[i] = Setting_Network.IP_Addr_Core[i];
+		net.arp.spa[i] = netSettings.IP[i];
 	}
 
 	if ((net.arp.oper[1] == ARP_REQUEST) & (FlagOurIp == 4)){
@@ -130,7 +61,7 @@ uint16_t netProcess_ARP(void){
 	
 		for (uint8_t i=0; i<6; i++){
 			net.arp.tha[i] = net.arp.sha[i];
-			net.arp.sha[i] = Setting_Network.MAC_Addr_Core[i];
+			net.arp.sha[i] = netSettings.MAC[i];
 		}
 		return sizeof(net.arp);
 	} else if ((net.arp.oper[1] == ARP_REPLY) & (FlagOurGate == 4)){
@@ -145,9 +76,9 @@ uint16_t netProcess_IP(void){
 	if (net.ip.ver_hlen!= 0x45) return 0;
 	
 	for (uint8_t i=0; i<4; i++)
-		if (net.ip.ip_dst[i] == Setting_Network.IP_Addr_Core[i]) {
+		if (net.ip.ip_dst[i] == netSettings.IP[i]) {
 			net.ip.ip_dst[i] = net.ip.ip_src[i];
-			net.ip.ip_src[i] = Setting_Network.IP_Addr_Core[i];
+			net.ip.ip_src[i] = netSettings.IP[i];
 		} else return 0;
 	// Устанавливаем байт TOS в 0, это для DSCP + ECN
 	net.ip.tos = 0x00;
@@ -183,10 +114,9 @@ uint16_t netProcess_IP(void){
 uint16_t netProcess_ICMP(void){
 	if (net.ip.icmp.type != ICMP_ECHO_REQ) return 0;
 	net.ip.icmp.type = ICMP_ECHO_REPLY;
-	uint16_t CRC_ICMP = (net.ip.icmp.checksum[1] << 8) + net.ip.icmp.checksum[0];
+	uint16_t CRC_ICMP = net.ip.icmp.checksum;
 	CRC_ICMP += 8;
-	net.ip.icmp.checksum[1] = (uint8_t)(CRC_ICMP >> 8);
-	net.ip.icmp.checksum[0]	 = (uint8_t)(CRC_ICMP);
+	net.ip.icmp.checksum = CRC_ICMP;
 	return LongPacket;
 }
 
