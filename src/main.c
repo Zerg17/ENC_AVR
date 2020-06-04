@@ -30,8 +30,8 @@ int main(void){
     netSettings.GW[3] = Addr_Gate_3;
 
     encInit();
-
-    //sei();
+    countInit();
+    sei();
     while(1){
         packetReceive();
     }

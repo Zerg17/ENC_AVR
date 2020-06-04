@@ -1,6 +1,10 @@
 #include "system.h"
 #include "config.h"
 
+uint16_t tics;
+uint16_t ms;
+uint32_t sec;
+
 // uint8_t bufUI[256];
 // volatile uint8_t posTX=0, posW=0;
 
@@ -38,4 +42,19 @@ uint8_t spiWR(uint8_t d) {
     SPDR = d;
     while ((SPSR & (1 << SPIF)) == 0);  //Ожидание окончание передачи
     return SPDR;
+}
+
+void countInit(){
+    recR(TCCR2A, (1<<WGM21)|(1<<WGM20));
+    recR(OCR2A, 124);
+    setRB(TIMSK2, TOIE2);
+    recR(TCCR2B, (1<<WGM22)|(1<<CS22)|(1<<CS20));
+}
+
+ISR(TIMER2_OVF_vect){
+    tics++;
+	if(++ms == 1000){
+		++sec;
+		ms = 0;
+	}
 }
