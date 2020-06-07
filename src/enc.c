@@ -2,6 +2,7 @@
 #include "enc_reg.h"
 #include "config.h"
 #include "system.h"
+#include "net.h"
 
 #define ENC_SET resRB(PORTB, 2)
 #define ENC_RES setRB(PORTB, 2)
@@ -87,6 +88,18 @@ void encWritePHY(uint8_t adr, uint16_t data){
 }
 
 void encInit(void){	
+
+    netSettings.mac[0] = MAC_0;
+    netSettings.mac[1] = MAC_1;
+    netSettings.mac[2] = MAC_2;
+    netSettings.mac[3] = MAC_3;
+    netSettings.mac[4] = MAC_4;
+    netSettings.mac[5] = MAC_5;
+
+    netSettings.ip = inet_addr(Addr_IP_0, Addr_IP_1, Addr_IP_2, Addr_IP_3);
+
+    netSettings.gw = inet_addr(Addr_Gate_0, Addr_Gate_1, Addr_Gate_2, Addr_Gate_3);
+
     spi_init();
     encSoftReset();
     encSetBank(0);

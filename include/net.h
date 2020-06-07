@@ -4,6 +4,10 @@
 #include <stdint.h>
 #include "config.h"
 
+#define inet_addr(a,b,c,d)  (((uint32_t)(a)) | ((uint32_t)(b) << 8) | ((uint32_t)(c) << 16) | ((uint32_t)(d) << 24))
+#define htons(a)            ((((a)>>8)&0xff)|(((a)<<8)&0xff00))
+#define ntohs(a)            htons(a)
+
 // Длинна или позиция байт разных протоколов
 // Ethernet протокол
 #define ETH_SIZE		14 // Общая длинна параметров
@@ -11,8 +15,8 @@
 #define ETH_SRC			6  // 6 байт. MAC адрес источника
 #define ETH_TYPE		12 // 2 байт. Тип интернета
 // Уникальные идентификаторы Интернета
-#define ETHTYPE_IP		0x0800 // Пакет IP v.4  
-#define ETHTYPE_ARP		0x0806 // Пакет ARP 
+#define ETHTYPE_IP		htons(0x0800) // Пакет IP v.4  
+#define ETHTYPE_ARP		htons(0x0806) // Пакет ARP 
 
 // ARP протокол
 #define	ARP_SIZE		28 // Общая длинна параметров 
@@ -26,8 +30,8 @@
 #define	ARP_THA			18 // 6 байт. MAC адрес получателя
 #define ARP_TPA			24 // 4 байт. IP адрес получателя
 
-#define ARP_REQUEST		1  // ЭХО запрос
-#define ARP_REPLY		2  // ЭХО ответ
+#define ARP_REQUEST		htons(1)  // ЭХО запрос
+#define ARP_REPLY		htons(2)  // ЭХО ответ
 
 
 // IP протокол
@@ -102,40 +106,40 @@ typedef struct{
 } arpGate_t;
 
 typedef struct{
-	uint8_t  MAC[6];
-	uint8_t	 IP[4];
-	uint8_t	 GW[4];
+	uint8_t  mac[6];
+	uint32_t ip;
+	uint32_t gw;
 } netSettings_t;
 
 struct{
 	struct{
-		uint8_t dstMAC[6];
-		uint8_t srcMAC[6];
-		uint8_t type[2];
+		uint8_t dstMAC[6];		// адрес получателя
+		uint8_t srcMAC[6];		// адрес отправителя
+		uint16_t type;			// протокол
 	} eth;
 	union{
 		struct{
-			uint8_t htype[2];
-			uint8_t ptype[2];
-			uint8_t hlen;
-			uint8_t plen;
-			uint8_t oper[2];
-			uint8_t sha[6];
-			uint8_t spa[4];
-			uint8_t tha[6];
-			uint8_t tpa[4];
+			uint16_t htype;		// протокол канального уровня (Ethernet)
+			uint16_t ptype;		// протокол сетевого уровня (IP)
+			uint8_t hlen;		// длина MAC-адреса =6
+			uint8_t plen;		// длина IP-адреса =4
+			uint16_t oper;		// тип сообщения (запрос/ответ)
+			uint8_t sha[6];		// MAC-адрес отправителя
+			uint32_t spa;		// IP-адрес отправителя
+			uint8_t tha[6];		// MAC-адрес получателя, нули если неизвестен
+			uint32_t tpa;		// IP-адрес получателя
 		}arp;
 		struct{
-			uint8_t ver_hlen;
-			uint8_t tos;
-			uint8_t lenght[2];
-			uint8_t id[2];
-			uint8_t flugs_fo[2];
-			uint8_t ttl;
-			uint8_t proto;
-			uint8_t hcs[2];
-			uint8_t ip_src[4];
-			uint8_t ip_dst[4];
+			uint8_t ver_hlen;	// версия и длина заголовка =0x45
+			uint8_t tos;		//тип сервиса
+			uint16_t lenght;	//длина всего пакета
+			uint16_t id;		//идентификатор фрагмента
+			uint16_t flugs_fo;	//смещение фрагмента
+			uint8_t ttl;		//TTL
+			uint8_t proto;		//код протокола
+			uint16_t hcs;		//контрольная сумма заголовка
+			uint32_t ip_src;	//IP-адрес отправителя
+			uint32_t ip_dst;	//IP-адрес получателя
 			union{
 				struct{
 					uint8_t srcport[2];
@@ -160,8 +164,8 @@ struct{
 					uint8_t type;
 					uint8_t code;
 					uint16_t checksum;
-					uint8_t ident[2];
-					uint8_t seq_le[2];
+					uint16_t ident;
+					uint16_t seq_le;
 					uint8_t data[FRAME_LENGTH-14-20-8];
 				}icmp;
 			};
