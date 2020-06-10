@@ -134,7 +134,7 @@ struct{
 			uint8_t tos;		//тип сервиса
 			uint16_t lenght;	//длина всего пакета
 			uint16_t id;		//идентификатор фрагмента
-			uint16_t flugs_fo;	//смещение фрагмента
+			uint16_t flags_fo;	//смещение фрагмента
 			uint8_t ttl;		//TTL
 			uint8_t proto;		//код протокола
 			uint16_t hcs;		//контрольная сумма заголовка
@@ -149,15 +149,15 @@ struct{
 					uint8_t data[FRAME_LENGTH-14-20-8];
 				}udp;
 				struct{
-					uint8_t srcport[2];
-					uint8_t dstport[2];
-					uint8_t seqnum[4];
-					uint8_t acknum[4];
-					uint8_t doo;
-					uint8_t flags;
-					uint8_t window[2];
-					uint8_t checksum[2];
-					uint8_t urgent[2];
+					uint16_t srcport;	// порт отправителя
+					uint16_t dstport;	// порт получателя
+					uint32_t seqnum;	// указатель потока
+					uint32_t acknum;	// указатель подтверждения
+					uint8_t doo;		// размер заголовка
+					uint8_t flags;		// флаги
+					uint16_t window;	// размер окна
+					uint16_t checksum;	// контрольная сумма
+					uint16_t urgent;	// указатель срочных данных
 					uint8_t data[FRAME_LENGTH-14-20-20];
 				}tcp;
 				struct{

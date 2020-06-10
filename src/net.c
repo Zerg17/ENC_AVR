@@ -72,7 +72,7 @@ uint16_t netProcessIP(void){
 	// Устанавливаем байт TOS в 0, это для DSCP + ECN
 	net.ip.tos = 0x00;
 	// Устанавливаем флаги и смещение в 0
-	net.ip.flugs_fo  = 0;
+	net.ip.flags_fo  = 0;
 	// Устанавливаем TTL
 	net.ip.ttl = IP_TTLVALUE;
 	uint16_t packCount = IP_SIZE;
